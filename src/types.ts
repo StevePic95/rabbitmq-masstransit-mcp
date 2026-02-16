@@ -174,6 +174,12 @@ export interface MassTransitFault {
   exceptions?: MassTransitException[];
   message?: Record<string, unknown>;
   host?: MassTransitEnvelope["host"];
+  // Header-based fields (from MT-Fault-* headers on _error queue messages)
+  consumerType?: string;
+  inputAddress?: string;
+  messageType?: string;
+  retryCount?: number;
+  reason?: string;
 }
 
 export interface MassTransitException {

@@ -49,13 +49,56 @@ export function parseEnvelope(
   }
 }
 
+/**
+ * Parse fault info from MT-Fault-* headers that MassTransit adds
+ * when moving a message to the _error queue.
+ */
+export function parseFaultFromHeaders(
+  headers: Record<string, unknown>
+): MassTransitFault | null {
+  const reason = headers["MT-Reason"] as string | undefined;
+  const exceptionType = headers["MT-Fault-ExceptionType"] as string | undefined;
+  const faultMessage = headers["MT-Fault-Message"] as string | undefined;
+
+  if (!reason && !exceptionType) return null;
+
+  return {
+    faultedMessageId: undefined,
+    timestamp: headers["MT-Fault-Timestamp"] as string | undefined,
+    consumerType: headers["MT-Fault-ConsumerType"] as string | undefined,
+    inputAddress: headers["MT-Fault-InputAddress"] as string | undefined,
+    messageType: headers["MT-Fault-MessageType"] as string | undefined,
+    retryCount: headers["MT-Fault-RetryCount"] as number | undefined,
+    reason: reason,
+    exceptions: exceptionType
+      ? [
+          {
+            exceptionType,
+            message: faultMessage,
+            stackTrace: headers["MT-Fault-StackTrace"] as string | undefined,
+          },
+        ]
+      : undefined,
+    host: {
+      machineName: headers["MT-Host-MachineName"] as string | undefined,
+      processName: headers["MT-Host-ProcessName"] as string | undefined,
+      processId: headers["MT-Host-ProcessId"] as number | undefined,
+      assembly: headers["MT-Host-Assembly"] as string | undefined,
+      assemblyVersion: headers["MT-Host-AssemblyVersion"] as string | undefined,
+      frameworkVersion: headers["MT-Host-FrameworkVersion"] as string | undefined,
+      massTransitVersion: headers["MT-Host-MassTransitVersion"] as string | undefined,
+      operatingSystemVersion: headers["MT-Host-OperatingSystemVersion"] as string | undefined,
+    },
+  };
+}
+
 export function parseFault(payload: string): MassTransitFault | null {
   try {
     const envelope = JSON.parse(payload) as MassTransitEnvelope;
     if (!envelope.message) return null;
 
     const msg = envelope.message;
-    // MassTransit faults have an exceptions array in the message payload
+    // MassTransit Fault<T> messages have an exceptions array in the message payload
     if (
       msg.exceptions &&
       Array.isArray(msg.exceptions) &&
@@ -81,34 +124,92 @@ export function formatFaultMessage(
   msg: PeekedMessage,
   index: number
 ): string {
-  const fault = parseFault(msg.payload);
+  const headers = msg.properties.headers ?? {};
+  const headerFault = parseFaultFromHeaders(headers);
+  const bodyFault = parseFault(msg.payload);
   const envelope = parseEnvelope(msg.payload);
 
-  if (fault) {
-    const ex = fault.exceptions?.[0];
-    const messageTypes = envelope?.messageType
-      ? envelope.messageType.map(getMessageTypeName)
-      : [];
-    const host = fault.host;
+  // Prefer header-based fault info (this is where MassTransit puts it on _error queues)
+  if (headerFault) {
+    const ex = headerFault.exceptions?.[0];
+    const messageType =
+      headerFault.messageType ?? (envelope?.messageType
+        ? envelope.messageType.map(getMessageTypeName).join(", ")
+        : "unknown");
+    const host = headerFault.host;
     const hostInfo = host
       ? `${host.machineName ?? "unknown"} / ${host.processName ?? "unknown"} (PID ${host.processId ?? "?"})`
       : "unknown";
 
     const lines = [
       `Message ${index + 1}:`,
-      `  Faulted: ${fault.timestamp ?? "unknown"}`,
-      `  Original MessageId: ${fault.faultedMessageId ?? "unknown"}`,
+      `  Faulted: ${headerFault.timestamp ?? "unknown"}`,
+      `  Reason: ${headerFault.reason ?? "fault"}`,
+      `  Message Type: ${messageType}`,
+    ];
+
+    if (headerFault.consumerType) {
+      lines.push(`  Consumer: ${headerFault.consumerType}`);
+    }
+
+    if (ex) {
+      lines.push(`  Exception: ${ex.exceptionType ?? "unknown"} - "${ex.message ?? "unknown"}"`);
+    }
+
+    if (headerFault.retryCount !== undefined) {
+      lines.push(`  Retry Count: ${headerFault.retryCount}`);
+    }
+
+    if (ex?.stackTrace) {
+      const stackLines = ex.stackTrace.split("\n").slice(0, 8);
+      lines.push(`  Stack Trace:\n${stackLines.map((l) => `    ${l.trim()}`).join("\n")}`);
+    }
+
+    // Show the original message payload from the body
+    if (envelope?.message) {
+      const payloadStr = JSON.stringify(envelope.message, null, 2);
+      const truncated =
+        payloadStr.length > 500
+          ? payloadStr.slice(0, 500) + "\n    ... (truncated)"
+          : payloadStr;
+      lines.push(`  Original Payload: ${truncated}`);
+    }
+
+    lines.push(`  Source Host: ${hostInfo}`);
+
+    if (host?.assembly && host?.assemblyVersion) {
+      lines.push(`  Assembly: ${host.assembly} v${host.assemblyVersion} (.NET ${host.frameworkVersion ?? "?"})`);
+    }
+
+    return lines.join("\n");
+  }
+
+  // Fallback: body-based Fault<T> envelope parsing
+  if (bodyFault) {
+    const ex = bodyFault.exceptions?.[0];
+    const messageTypes = envelope?.messageType
+      ? envelope.messageType.map(getMessageTypeName)
+      : [];
+    const host = bodyFault.host;
+    const hostInfo = host
+      ? `${host.machineName ?? "unknown"} / ${host.processName ?? "unknown"} (PID ${host.processId ?? "?"})`
+      : "unknown";
+
+    const lines = [
+      `Message ${index + 1}:`,
+      `  Faulted: ${bodyFault.timestamp ?? "unknown"}`,
+      `  Original MessageId: ${bodyFault.faultedMessageId ?? "unknown"}`,
       `  Message Type: ${messageTypes.length > 0 ? messageTypes.join(", ") : "unknown"}`,
       `  Exception: ${ex?.exceptionType ?? "unknown"} - "${ex?.message ?? "unknown"}"`,
     ];
 
     if (ex?.stackTrace) {
-      const stackLines = ex.stackTrace.split("\n").slice(0, 5);
+      const stackLines = ex.stackTrace.split("\n").slice(0, 8);
       lines.push(`  Stack Trace:\n${stackLines.map((l) => `    ${l.trim()}`).join("\n")}`);
     }
 
-    if (fault.message) {
-      const payloadStr = JSON.stringify(fault.message, null, 2);
+    if (bodyFault.message) {
+      const payloadStr = JSON.stringify(bodyFault.message, null, 2);
       const truncated =
         payloadStr.length > 500
           ? payloadStr.slice(0, 500) + "\n    ... (truncated)"
@@ -120,7 +221,7 @@ export function formatFaultMessage(
     return lines.join("\n");
   }
 
-  // Fallback for non-fault messages in error queues
+  // Fallback: plain MassTransit envelope (no fault info found)
   if (envelope) {
     const messageTypes = envelope.messageType
       ? envelope.messageType.map(getMessageTypeName)
