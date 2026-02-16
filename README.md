@@ -8,9 +8,41 @@ Built for teams debugging async messaging issues across .NET microservices. Goes
 
 - **18 tools** for complete RabbitMQ management via Claude Code
 - **MassTransit-aware**: Automatically detects and parses `_error`/`_skipped` queues, fault envelopes, and message type URNs
-- **Parsed error output**: Exception types, messages, stack traces, and original payloads — not raw JSON dumps
+- **Parsed error output**: Exception types, messages, stack traces, consumer types, retry counts, and original payloads — extracted from `MT-Fault-*` message headers
 - **Republish from error**: The killer feature — fetch faulted messages and republish them for reprocessing
 - **Safe defaults**: Mutative tools disabled by default, two-step confirmation for destructive operations
+
+## Quickstart
+
+**1. Add to your Claude Code config** (`~/.claude.json` or project `.claude.json`):
+
+```json
+{
+  "mcpServers": {
+    "rabbitmq": {
+      "command": "npx",
+      "args": ["-y", "@stevepic95/rabbitmq-masstransit-mcp"],
+      "env": {
+        "RABBITMQ_HOST": "your-rabbitmq-host",
+        "RABBITMQ_USERNAME": "your-username",
+        "RABBITMQ_PASSWORD": "your-password"
+      }
+    }
+  }
+}
+```
+
+**2. Restart Claude Code** to load the new MCP server.
+
+**3. Start using it.** Ask Claude things like:
+- *"Are there any error queues with messages?"*
+- *"Show me the faults in the submit-order error queue"*
+- *"What queues have no consumers?"*
+- *"How many messages are in the report queue?"*
+
+That's it. The 13 read-only tools are available immediately — no flags needed.
+
+> To enable write operations (purge, delete, publish, republish), set `"ALLOW_MUTATIVE_TOOLS": "true"` in the env config.
 
 ## Installation
 
@@ -108,21 +140,26 @@ You can also enable mutative tools via CLI flag: `--allow-mutative-tools`
 
 ### Error Queue Parsing
 
-`peek_errors` doesn't just dump raw JSON — it parses MassTransit fault envelopes into readable output:
+`peek_errors` doesn't just dump raw JSON — it reads `MT-Fault-*` headers that MassTransit attaches when moving messages to error queues, giving you everything you need to debug the failure:
 
 ```
 Queue: submit-order_error (3 messages)
 
 Message 1:
   Faulted: 2026-02-15T14:30:05Z
-  Original MessageId: 5fdc0000-426e-001c-fcf9-08d9a30339e8
+  Reason: fault
   Message Type: MyApp.Messages.OrderSubmitted
-  Exception: System.InvalidOperationException - "Order validation failed"
+  Consumer: MyApp.Consumers.SubmitOrderConsumer
+  Exception: Microsoft.Data.SqlClient.SqlException - "Arithmetic overflow error converting numeric to data type numeric."
+  Retry Count: 5
   Stack Trace:
-    at MyApp.Consumers.OrderConsumer.Consume(ConsumeContext`1 context)
-    at MassTransit.Middleware.ConsumerMessageFilter`2.Send(...)
-  Original Payload: { "orderId": "abc-123", ... }
-  Source Host: WEBSERVER01 / OrderService (PID 12345)
+    at Microsoft.Data.SqlClient.TdsParser.ThrowExceptionAndWarning(...)
+    at MyApp.Data.OrderRepository.GetFees(Int32 orderId) in /src/OrderRepository.cs:line 35
+    at MyApp.Services.OrderService.Process(Int32 id) in /src/OrderService.cs:line 51
+    at MyApp.Consumers.SubmitOrderConsumer.Consume(ConsumeContext`1 context) in /src/SubmitOrderConsumer.cs:line 11
+  Original Payload: { "orderId": "abc-123", "amount": 99.99 }
+  Source Host: order-service-swrm-app1b-p02 / order-service (PID 1)
+  Assembly: order-service v1.0.3.0 (.NET 8.0.8)
 ```
 
 ### Republish from Error (Two-Step)
