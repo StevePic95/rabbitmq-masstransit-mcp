@@ -1,6 +1,6 @@
 {
   "name": "@stevepic95/rabbitmq-masstransit-mcp",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "MCP server for RabbitMQ with MassTransit intelligence — error queue parsing, fault analysis, and message republishing",
   "type": "module",
   "main": "dist/index.js",

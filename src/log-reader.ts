@@ -6,6 +6,10 @@ import type { LogNodeConfig, LogFileInfo } from "./types.js";
 
 type Platform = "windows" | "wsl" | "posix";
 
+const CMD_EXE = "/mnt/c/WINDOWS/system32/cmd.exe";
+const POWERSHELL_EXE =
+  "/mnt/c/WINDOWS/System32/WindowsPowerShell/v1.0/powershell.exe";
+
 function detectPlatform(): Platform {
   if (process.platform === "win32") return "windows";
   try {
@@ -149,9 +153,12 @@ export class LogReader {
 
   private async listFilesWsl(sharePath: string): Promise<LogFileInfo[]> {
     const uncPath = toUncPath(sharePath);
-    const output = await execFilePromise("cmd.exe", [
+    const output = await execFilePromise(CMD_EXE, [
       "/c",
-      `dir "${uncPath}" /A-D /-C`,
+      "dir",
+      uncPath,
+      "/A-D",
+      "/-C",
     ]);
     return this.parseDirOutput(output);
   }
@@ -186,7 +193,7 @@ export class LogReader {
   ): Promise<string> {
     const uncPath = toUncPath(sharePath);
     const filePath = `${uncPath}\\${fileName}`;
-    return execFilePromise("cmd.exe", ["/c", `type "${filePath}"`]);
+    return execFilePromise(CMD_EXE, ["/c", "type", filePath]);
   }
 
   private async tailFileWsl(
@@ -196,7 +203,7 @@ export class LogReader {
   ): Promise<string> {
     const uncPath = toUncPath(sharePath);
     const filePath = `${uncPath}\\${fileName}`;
-    return execFilePromise("powershell.exe", [
+    return execFilePromise(POWERSHELL_EXE, [
       "-NoProfile",
       "-Command",
       `Get-Content -Path '${filePath}' -Tail ${lines} -Encoding UTF8`,
