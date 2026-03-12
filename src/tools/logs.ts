@@ -27,7 +27,7 @@ function formatSize(bytes: number): string {
 }
 
 function currentLogName(nodeName: string): string {
-  // Node name is like "rabbit@RMQ-APP1A-P01", log file is "rabbit@RMQ-APP1A-P01.log"
+  // Node name is like "rabbit@HOSTNAME", log file is "rabbit@HOSTNAME.log"
   return `${nodeName}.log`;
 }
 
@@ -46,7 +46,7 @@ export function registerLogTools(
           .string()
           .optional()
           .describe(
-            'RabbitMQ node name (e.g. "rabbit@RMQ-APP1A-P01"). Omit to list files from all configured nodes.'
+            'RabbitMQ node name (e.g. "rabbit@HOSTNAME"). Omit to list files from all configured nodes.'
           ),
       }),
     },
@@ -101,13 +101,13 @@ export function registerLogTools(
         node: z
           .string()
           .describe(
-            'RabbitMQ node name (e.g. "rabbit@RMQ-APP1A-P01")'
+            'RabbitMQ node name (e.g. "rabbit@HOSTNAME")'
           ),
         file: z
           .string()
           .optional()
           .describe(
-            "Log file name. Defaults to the current log for the node (e.g. rabbit@RMQ-APP1A-P01.log). Use list_log_files to see available files."
+            "Log file name. Defaults to the current log for the node (e.g. rabbit@HOSTNAME.log). Use list_log_files to see available files."
           ),
         tail: z
           .number()

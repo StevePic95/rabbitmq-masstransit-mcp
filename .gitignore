@@ -2,3 +2,5 @@ node_modules/
 dist/
 *.tgz
 .npmrc
+CLAUDE.md
+STANDUP-DEMO.md

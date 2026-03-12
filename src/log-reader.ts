@@ -167,7 +167,7 @@ export class LogReader {
     const results: LogFileInfo[] = [];
     const lines = output.split("\n");
     // dir output lines look like:
-    // 03/12/2026  02:25 PM          1234567 rabbit@RMQ-APP1A-P01.log
+    // 03/12/2026  02:25 PM          1234567 rabbit@HOSTNAME.log
     const dirLineRegex =
       /^(\d{2}\/\d{2}\/\d{4})\s+(\d{2}:\d{2}\s+[AP]M)\s+(\d+)\s+(.+)$/;
     for (const line of lines) {
