@@ -201,6 +201,28 @@ export interface ParsedFaultMessage {
   sourceHost: string;
 }
 
+export interface LogNodeConfig {
+  nodeName: string;
+  sharePath: string;
+}
+
+export interface LogConfig {
+  nodes: LogNodeConfig[];
+}
+
+export interface LogEntry {
+  timestamp: string;
+  level: string;
+  pid: string;
+  message: string;
+}
+
+export interface LogFileInfo {
+  name: string;
+  size: number;
+  lastModified: Date;
+}
+
 export type ToolHandler = (args: Record<string, unknown>) => Promise<{
   content: Array<{ type: "text"; text: string }>;
 }>;

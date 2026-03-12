@@ -3,13 +3,15 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { RabbitMQClient } from "./rabbitmq-client.js";
-import type { RabbitMQConfig } from "./types.js";
+import { LogReader } from "./log-reader.js";
+import type { RabbitMQConfig, LogConfig } from "./types.js";
 import { registerOverviewTools } from "./tools/overview.js";
 import { registerQueueTools } from "./tools/queues.js";
 import { registerExchangeTools } from "./tools/exchanges.js";
 import { registerMessageTools } from "./tools/messages.js";
 import { registerConnectionTools } from "./tools/connections.js";
 import { registerMassTransitTools } from "./tools/masstransit.js";
+import { registerLogTools } from "./tools/logs.js";
 
 function getConfig(): RabbitMQConfig {
   const host = process.env.RABBITMQ_HOST;
@@ -45,6 +47,27 @@ function getConfig(): RabbitMQConfig {
   };
 }
 
+function getLogConfig(): LogConfig | null {
+  const raw = process.env.RABBITMQ_LOG_NODES;
+  if (!raw) return null;
+
+  const nodes = raw.split(",").map((entry) => {
+    const eqIndex = entry.indexOf("=");
+    if (eqIndex === -1) {
+      throw new Error(
+        `Invalid RABBITMQ_LOG_NODES entry "${entry}" — expected "nodeName=//host/share/path"`
+      );
+    }
+    return {
+      nodeName: entry.slice(0, eqIndex).trim(),
+      sharePath: entry.slice(eqIndex + 1).trim(),
+    };
+  });
+
+  if (nodes.length === 0) return null;
+  return { nodes };
+}
+
 async function main() {
   const config = getConfig();
   const client = new RabbitMQClient(config);
@@ -62,12 +85,22 @@ async function main() {
   registerConnectionTools(server, client);
   registerMassTransitTools(server, client, config.allowMutativeTools);
 
+  // Conditionally register log tools
+  const logConfig = getLogConfig();
+  if (logConfig) {
+    const logReader = new LogReader();
+    registerLogTools(server, logReader, logConfig);
+  }
+
   // Connect via stdio
   const transport = new StdioServerTransport();
   await server.connect(transport);
 
+  const logInfo = logConfig
+    ? `, log nodes: ${logConfig.nodes.length}`
+    : "";
   console.error(
-    `RabbitMQ MassTransit MCP server running (${config.host}:${config.port}, vhost: ${config.vhost}, mutative tools: ${config.allowMutativeTools ? "enabled" : "disabled"})`
+    `RabbitMQ MassTransit MCP server running (${config.host}:${config.port}, vhost: ${config.vhost}, mutative tools: ${config.allowMutativeTools ? "enabled" : "disabled"}${logInfo})`
   );
 }
 
