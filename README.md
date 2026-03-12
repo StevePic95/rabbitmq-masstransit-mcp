@@ -21,7 +21,7 @@ Built for teams debugging async messaging issues across .NET microservices. Goes
   "mcpServers": {
     "rabbitmq": {
       "command": "npx",
-      "args": ["-y", "@stevepic95/rabbitmq-masstransit-mcp"],
+      "args": ["-y", "@stevepic95/rabbitmq-masstransit-mcp@latest"],
       "env": {
         "RABBITMQ_HOST": "your-rabbitmq-host",
         "RABBITMQ_USERNAME": "your-username",
@@ -47,7 +47,7 @@ That's it. The 13 read-only tools are available immediately — no flags needed.
 ## Installation
 
 ```bash
-npx @stevepic95/rabbitmq-masstransit-mcp
+npx @stevepic95/rabbitmq-masstransit-mcp@latest
 ```
 
 ### Claude Code Configuration
@@ -59,7 +59,7 @@ Add to your `.claude.json` under `mcpServers`:
   "mcpServers": {
     "rabbitmq": {
       "command": "npx",
-      "args": ["-y", "@stevepic95/rabbitmq-masstransit-mcp"],
+      "args": ["-y", "@stevepic95/rabbitmq-masstransit-mcp@latest"],
       "env": {
         "RABBITMQ_HOST": "your-rabbitmq-host",
         "RABBITMQ_PORT": "15672",
